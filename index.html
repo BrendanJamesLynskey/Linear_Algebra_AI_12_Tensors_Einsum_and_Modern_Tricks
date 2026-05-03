@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linear Algebra for AI 12 &mdash; Tensors, Einsum &amp; Modern Tricks</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+    <style>
+        :root { --bg-primary: #0a0a0a; --bg-card: #0d1117; --bg-code: #161b22; --text-primary: #e6edf3; --text-secondary: #8b949e; --accent: #a78bfa; --accent-dim: #a78bfa44; --accent-glow: #a78bfa33; --accent-2: #f472b6; --accent-3: #fbbf24; --accent-4: #34d399; --border: #21262d; --font-display: 'Space Grotesk', sans-serif; --font-mono: 'JetBrains Mono', 'Fira Code', monospace; --font-body: 'Inter', sans-serif; --max-width: 900px; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        body { background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-body); font-size: 17px; line-height: 1.7; overflow-x: hidden; }
+        .hero { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem 1.5rem; text-align: center; position: relative; }
+        .hero::before { content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 700px; height: 600px; background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%); pointer-events: none; z-index: 0; }
+        .hero > * { position: relative; z-index: 1; }
+        .series-label { font-family: var(--font-mono); font-size: 0.85rem; color: var(--accent); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 1rem; }
+        .hero h1 { font-family: var(--font-display); font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 700; color: var(--text-primary); line-height: 1.2; margin-bottom: 1rem; }
+        .hero h1 .accent { color: var(--accent); }
+        .hero .subtitle { font-size: 1.1rem; color: var(--text-secondary); max-width: 640px; margin-bottom: 2rem; }
+        .tags { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-bottom: 2.5rem; }
+        .tag { font-family: var(--font-mono); font-size: 0.75rem; padding: 0.25rem 0.75rem; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); background: var(--accent-dim); white-space: nowrap; }
+        .pipeline { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.25rem; margin-bottom: 1rem; max-width: var(--max-width); }
+        .pipeline-step { font-family: var(--font-mono); font-size: 0.7rem; padding: 0.3rem 0.7rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); white-space: nowrap; }
+        .pipeline-arrow { color: var(--accent); font-size: 0.9rem; font-weight: 700; }
+        .slide { min-height: 100vh; max-width: var(--max-width); margin: 0 auto; padding: 4rem 1.5rem; position: relative; display: flex; flex-direction: column; justify-content: center; }
+        .slide-number { font-family: var(--font-display); font-size: 5rem; font-weight: 700; color: var(--accent-dim); position: absolute; top: 2rem; right: 1.5rem; line-height: 1; user-select: none; }
+        .slide h2 { font-family: var(--font-display); font-size: 1.9rem; font-weight: 700; color: var(--accent); margin-bottom: 1.5rem; line-height: 1.25; }
+        .slide h3 { font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; color: var(--text-primary); margin-top: 1.5rem; margin-bottom: 0.75rem; }
+        .slide p { margin-bottom: 1rem; color: var(--text-secondary); }
+        .slide p strong { color: var(--text-primary); }
+        .slide ul, .slide ol { margin-bottom: 1rem; padding-left: 1.5rem; color: var(--text-secondary); }
+        .slide li { margin-bottom: 0.4rem; }
+        .slide li strong { color: var(--text-primary); }
+        .slide code { background: var(--bg-code); padding: 0.1rem 0.35rem; border-radius: 3px; font-family: var(--font-mono); font-size: 0.85em; color: var(--accent); }
+        .table-wrap { overflow-x: auto; margin: 1.25rem 0; border-radius: 8px; border: 1px solid var(--border); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th { background: var(--bg-code); color: var(--accent); font-weight: 600; text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); font-family: var(--font-display); white-space: nowrap; }
+        td { padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); color: var(--text-secondary); vertical-align: top; }
+        tr:last-child td { border-bottom: none; }
+        tr:nth-child(even) td { background: rgba(13, 17, 23, 0.5); }
+        .diagram-grid { display: grid; gap: 0.75rem; margin: 1.5rem 0; padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
+        .diagram-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+        .diagram-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .diagram-panel { padding: 1rem; background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px; }
+        .diagram-panel.accent-border { border-left: 3px solid var(--accent); }
+        .diagram-panel.r { border-left: 3px solid var(--accent-2); }
+        .diagram-panel.y { border-left: 3px solid var(--accent-3); }
+        .diagram-panel.g { border-left: 3px solid var(--accent-4); }
+        .diagram-panel h4 { font-family: var(--font-display); font-size: 1rem; color: var(--accent); margin-bottom: 0.5rem; }
+        .diagram-panel.r h4 { color: var(--accent-2); } .diagram-panel.y h4 { color: var(--accent-3); } .diagram-panel.g h4 { color: var(--accent-4); }
+        .diagram-panel p, .diagram-panel ul { font-size: 0.9rem; }
+        .callout { background: var(--bg-card); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 1rem 1.25rem; margin: 1.25rem 0; }
+        .callout p { margin-bottom: 0; }
+        .callout .callout-label { font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.3rem; }
+        .canvas-wrap { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin: 1.25rem 0; overflow-x: auto; }
+        .canvas-wrap canvas, .canvas-wrap svg { display: block; margin: 0 auto; max-width: 100%; }
+        .contents-list { list-style: none; padding-left: 0; counter-reset: contents; }
+        .contents-list li { counter-increment: contents; padding: 0.6rem 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1rem; }
+        .contents-list li:last-child { border-bottom: none; }
+        .contents-list li::before { content: counter(contents, decimal-leading-zero); font-family: var(--font-mono); font-size: 0.85rem; color: var(--accent); min-width: 2rem; }
+        .contents-list a { color: var(--text-primary); text-decoration: none; }
+        .contents-list a:hover { color: var(--accent); }
+        .footer { text-align: center; padding: 3rem 1.5rem; color: var(--text-secondary); font-size: 0.85rem; border-top: 1px solid var(--border); max-width: var(--max-width); margin: 0 auto; }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .katex { color: var(--text-primary); } .katex-display { margin: 1rem 0; overflow-x: auto; overflow-y: hidden; }
+        pre.code { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-primary); overflow-x: auto; line-height: 1.5; margin: 1rem 0; }
+        pre.code .kw { color: var(--accent); }
+        pre.code .cm { color: var(--text-secondary); }
+        pre.code .sh { color: var(--accent-3); }
+        @media (max-width: 640px) { .slide { padding: 3rem 1rem; min-height: auto; } .slide-number { font-size: 3rem; top: 1.5rem; right: 1rem; } .slide h2 { font-size: 1.5rem; } .diagram-grid.cols-2, .diagram-grid.cols-3 { grid-template-columns: 1fr; } .hero h1 { font-size: 1.8rem; } table { font-size: 0.78rem; } }
+    </style>
+</head>
+<body>
+
+<header class="hero">
+    <div class="series-label">Linear Algebra for AI &mdash; Presentation 12</div>
+    <h1>Tensors, Einsum &amp; <span class="accent">Modern Tricks</span></h1>
+    <p class="subtitle">When you have batch, head, sequence, head-dim and feature, matrix algebra runs out of letters. Tensors, einsum and named indices give you the language to write &mdash; and parallelise &mdash; the algorithms that move large models across thousands of GPUs.</p>
+
+    <div class="tags">
+        <span class="tag">tensor</span><span class="tag">einsum</span>
+        <span class="tag">FlashAttention</span><span class="tag">MoE</span>
+        <span class="tag">tensor parallel</span><span class="tag">pipeline parallel</span>
+    </div>
+
+    <div class="pipeline">
+        <span class="pipeline-step">matrix → tensor</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">einsum</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">tile / shard</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">FlashAttn / MoE / TP</span>
+    </div>
+</header>
+
+<section class="slide" id="slide-00">
+    <div class="slide-number">00</div>
+    <h2>Topics We'll Cover</h2>
+    <ul class="contents-list">
+        <li><a href="#slide-01">From Matrix to Tensor</a></li>
+        <li><a href="#slide-02">Einsum &mdash; the Notation that Scales</a></li>
+        <li><a href="#slide-03">Reading Real Transformer Code in Einsum</a></li>
+        <li><a href="#slide-04">Strides, Views &amp; Layout</a></li>
+        <li><a href="#slide-05">FlashAttention as Block Matmul</a></li>
+        <li><a href="#slide-06">MoE as Sparse Projection</a></li>
+        <li><a href="#slide-07">Data, Tensor &amp; Pipeline Parallelism</a></li>
+        <li><a href="#slide-08">Sharding via Einsum &mdash; The GSPMD Picture</a></li>
+        <li><a href="#slide-09">Where the Series Lands</a></li>
+        <li><a href="#slide-10">Cheat Sheet</a></li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-01">
+    <div class="slide-number">01</div>
+    <h2>From Matrix to Tensor</h2>
+    <p>A scalar is a 0D array. A vector is a 1D array. A matrix is a 2D array. Anything with more dimensions is a <strong>tensor</strong>. Mathematically the word has a more specific meaning (multilinear maps with covariance under change of basis); in ML it's used loosely for "$k$-dimensional array of numbers".</p>
+
+    <p>Real ML code lives in 3D and 4D tensors:</p>
+    <ul>
+        <li><strong>Activations</strong> $X \in \mathbb{R}^{B \times L \times d}$ &mdash; batch size, sequence length, hidden dim.</li>
+        <li><strong>Attention scores</strong> $S \in \mathbb{R}^{B \times H \times L \times L}$ &mdash; batch, head, query, key.</li>
+        <li><strong>Q, K, V tensors</strong> $\mathbb{R}^{B \times H \times L \times d_h}$ &mdash; batch, head, sequence, head-dim.</li>
+        <li><strong>Convolution kernels</strong> $W \in \mathbb{R}^{C_{out} \times C_{in} \times k_h \times k_w}$ &mdash; out-channels, in-channels, height, width.</li>
+    </ul>
+
+    <h3>Two ways to read a tensor</h3>
+    <p>Either as a (typically batched) collection of matrices &mdash; in which case the "extra" axes are just iterators &mdash; or as a multilinear object whose contractions express more than matrix algebra can. Most code lives at the first reading; deep theory uses the second.</p>
+
+    <div class="callout">
+        <div class="callout-label">Tensor algebra is matrix algebra plus indexing</div>
+        <p>Almost everything you saw in earlier decks &mdash; matmul, projection, attention, FFN &mdash; is matrix algebra. The "tensors" are just batched stacks of those matrices. The few genuine higher-order operations (high-order convolutions, certain quantum-circuit contractions) are rare in practice. <em>Einsum is the bridge: it lets you write batched operations with the right dimensions implicit.</em></p>
+    </div>
+</section>
+
+<section class="slide" id="slide-02">
+    <div class="slide-number">02</div>
+    <h2>Einsum &mdash; the Notation that Scales</h2>
+    <p>Einstein summation convention: <em>any repeated index is summed over</em>. The form taken in NumPy / PyTorch / JAX:</p>
+
+    <p>$$\texttt{einsum("ij,jk->ik", A, B)} \quad\Longleftrightarrow\quad C_{ik} = \sum_j A_{ij} B_{jk}.$$</p>
+
+    <p>That's standard matmul. The right-of-arrow is the output indices; everything not on the right is summed. Inside the quotes, comma-separated index strings list the input tensors.</p>
+
+    <h3>The three operations einsum captures</h3>
+    <div class="diagram-grid cols-3">
+        <div class="diagram-panel accent-border">
+            <h4>Contraction</h4>
+            <p>Repeated index &rarr; summed. Matrix multiply, dot product, attention scoring, all matmul views (deck 03) are contractions.</p>
+        </div>
+        <div class="diagram-panel y">
+            <h4>Broadcasting</h4>
+            <p>Index that appears in only one input &rarr; preserved unchanged. Adds an "outer" dimension. The B (batch) and H (head) indices in attention are broadcast.</p>
+        </div>
+        <div class="diagram-panel g">
+            <h4>Permutation</h4>
+            <p>Index reordering: <code>"ij->ji"</code> is transpose. <code>"bhld->blhd"</code> is reshaping multi-head from (batch, head, seq, dim) to (batch, seq, head, dim).</p>
+        </div>
+    </div>
+
+    <h3>Why einsum scales</h3>
+    <p>Standard matrix notation has two indices &mdash; rows and columns. Once you have $\{batch, head, query, key, head\_dim, feature\}$ at the same time, you need six. Naming each one explicitly turns the algebra into something you can read. <em>The einsum string is a shape annotation that's also executable.</em></p>
+</section>
+
+<section class="slide" id="slide-03">
+    <div class="slide-number">03</div>
+    <h2>Reading Real Transformer Code in Einsum</h2>
+    <p>The single attention-block forward pass in einsum:</p>
+
+<pre class="code"><span class="cm"># Input: x[B, L, d]; weights W_Q[d, H, d_h], W_K[d, H, d_h], W_V[d, H, d_h], W_O[H, d_h, d]</span>
+q = einsum(<span class="sh">"bld,dhk->bhlk"</span>, x, W_Q)              <span class="cm"># q[B, H, L, d_h]</span>
+k = einsum(<span class="sh">"bld,dhk->bhlk"</span>, x, W_K)              <span class="cm"># k[B, H, L, d_h]</span>
+v = einsum(<span class="sh">"bld,dhk->bhlk"</span>, x, W_V)              <span class="cm"># v[B, H, L, d_h]</span>
+
+scores = einsum(<span class="sh">"bhlk,bhmk->bhlm"</span>, q, k) / sqrt(d_h)   <span class="cm"># scores[B, H, L, L]</span>
+attn   = softmax(scores + mask, axis=-1)                  <span class="cm"># attn[B, H, L, L]</span>
+out    = einsum(<span class="sh">"bhlm,bhmk->bhlk"</span>, attn, v)            <span class="cm"># out[B, H, L, d_h]</span>
+
+y = einsum(<span class="sh">"bhlk,hkd->bld"</span>, out, W_O)              <span class="cm"># y[B, L, d]</span></pre>
+
+    <p>Six lines. Read each einsum string and you can immediately see which axes are batched, which are contracted, which are permuted. No <code>.transpose()</code>, no <code>.reshape()</code>, no <code>.permute()</code>. The semantics are right there in the string.</p>
+
+    <h3>Index conventions you'll see</h3>
+    <ul>
+        <li><code>b</code> = batch, <code>l, m, n</code> = sequence positions, <code>h</code> = head, <code>k</code> = head-dim or contraction, <code>d</code> = model dim, <code>e</code> = expert (in MoE).</li>
+        <li>This is just <em>my</em> convention; libraries like JAX's einops use whatever letters are local. <strong>Pick a convention and stick to it.</strong> Inconsistent index naming is the easiest source of bugs in tensor code.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">JAX makes einsum the lingua franca</div>
+        <p>JAX's <code>jax.numpy.einsum</code> handles arbitrary contractions. <code>jax.experimental.shard_map</code> and the GSPMD partitioner reason about <em>which axis is sharded across which device dim</em> &mdash; using exactly the einsum index names. PyTorch is moving in the same direction with <code>torch.einsum</code> and DTensor. <em>The notation that lets you write fast batched code on one device is also the notation that lets you partition it across thousands.</em></p>
+    </div>
+</section>
+
+<section class="slide" id="slide-04">
+    <div class="slide-number">04</div>
+    <h2>Strides, Views &amp; Layout</h2>
+    <p>A tensor is two things: a flat 1D buffer of numbers and a small "metadata" header that says how to interpret it. The header has the shape and the <strong>strides</strong> &mdash; the number of elements you skip in the flat buffer to advance one step along each axis.</p>
+
+    <p>For $X \in \mathbb{R}^{B \times L \times d}$ stored in C-order: stride is $(L \cdot d, \ d, \ 1)$. Element $(b, l, k)$ is at flat offset $b \cdot L d + l \cdot d + k$.</p>
+
+    <h3>Why this matters</h3>
+    <ul>
+        <li><strong>View vs copy.</strong> <code>x.transpose(1,2)</code> in PyTorch usually returns a view: same buffer, different strides. <code>x.contiguous()</code> forces a copy with C-order strides. Some kernels require contiguous inputs (cuBLAS) and silently allocate a copy if not.</li>
+        <li><strong>Memory access pattern.</strong> Iterating along the last axis is sequential reads (stride 1) &mdash; cache-friendly. Iterating along the first axis with last-axis innermost is also cache-friendly. Iterating in the wrong order is a 10-100&times; performance loss.</li>
+        <li><strong>Reshape is free if contiguous.</strong> <code>x.view(...)</code> changes shape without moving data. If the requested shape isn't compatible with the current strides, you must <code>.contiguous().view(...)</code>.</li>
+    </ul>
+
+    <h3>The "BHLD vs BLHD" decision</h3>
+    <p>Multi-head attention can store $(B, H, L, d_h)$ or $(B, L, H, d_h)$. The score matmul <code>einsum("bhlk,bhmk->bhlm", q, k)</code> is a batched matmul; with BHLD layout, both operands have the same (B, H) outer dims and the matmul is along last two &mdash; cuBLAS-friendly. With BLHD layout you'd need a transpose. <strong>Most modern code uses BHLD for attention.</strong></p>
+</section>
+
+<section class="slide" id="slide-05">
+    <div class="slide-number">05</div>
+    <h2>FlashAttention as Block Matmul</h2>
+    <p>Naive attention materialises the full $L \times L$ score matrix in memory. For $L = 32k$, in fp16, that's ~2 GB <em>per attention head, per layer</em> &mdash; instantly unfeasible.</p>
+
+    <p>FlashAttention (Dao 2022, FlashAttention-2 2023, FlashAttention-3 2024) computes the same thing without ever writing the full score matrix to HBM. The trick is block matmul plus an online softmax.</p>
+
+    <h3>The block decomposition</h3>
+    <p>Split the queries into row-blocks $Q^{(1)}, Q^{(2)}, \ldots$ each of $B_r$ rows, and the keys/values into column-blocks $K^{(1)}, K^{(2)}, \ldots$ of $B_c$ rows. Each query-block, against each key/value-block:</p>
+    <ol>
+        <li>Load $Q^{(i)}, K^{(j)}, V^{(j)}$ tiles into on-chip SRAM.</li>
+        <li>Compute the partial score $S^{(ij)} = Q^{(i)} (K^{(j)})^\top$ &mdash; a $B_r \times B_c$ tile of scores in SRAM.</li>
+        <li>Update a running softmax: keep the maximum-so-far $m^{(i)}$ and the running denominator $\ell^{(i)}$, recompute the partial outputs and rescale.</li>
+        <li>Accumulate into $O^{(i)}$.</li>
+    </ol>
+
+    <p>Score matrix never leaves SRAM. HBM traffic is $O(N d^2 / B_c)$ instead of $O(N^2 d)$. For $N = 32k$ and $B_c = 64$, that's a 500&times; reduction in memory traffic. Result: identical numerical output, much faster wall-clock, much less peak memory.</p>
+
+    <div class="callout">
+        <div class="callout-label">The online-softmax algorithm</div>
+        <p>At its heart, FlashAttention is a generalised reduction. The softmax-then-weighted-sum can be re-formulated as a streaming reduction over key-blocks: keep the running max $m$, running denominator $\ell$, and running output $o$; on each new tile, rescale them to a new common max. The arithmetic is identical to plain softmax-attention up to floating-point rounding. <em>Block matmul + clever bookkeeping = a 5-10&times; wall-clock speedup at no quality cost.</em> This is the rare "free lunch" trick that has stuck across an entire field.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-06">
+    <div class="slide-number">06</div>
+    <h2>MoE as Sparse Projection</h2>
+    <p>A <strong>Mixture of Experts</strong> FFN replaces the single $W_{\text{up}}, W_{\text{down}}$ pair with $E$ "experts" of which only $k$ activate per token (typically $k = 2$ out of $E = 8, 64$, or 128).</p>
+
+    <p>For each token, a learned <strong>router</strong> produces a softmax distribution over experts, picks the top-$k$, and the FFN is</p>
+    <p>$$\mathrm{MoE}(\mathbf{x}) = \sum_{e \in \mathrm{TopK}(\mathbf{x})} g_e(\mathbf{x})\, \mathrm{Expert}_e(\mathbf{x}),$$</p>
+    <p>with $g_e$ the gating weights (renormalised softmax over chosen experts).</p>
+
+    <h3>Linear-algebra reading</h3>
+    <p>Each $\mathrm{Expert}_e$ is a standard FFN: $W_{\text{up},e}, W_{\text{gate},e}, W_{\text{down},e}$. The router output is a sparse vector of length $E$ with exactly $k$ non-zero entries. Read MoE as a <strong>sparse-projection FFN</strong>: only $k$ of the available "directions" of feature-space contribute on any given token.</p>
+
+    <h3>The numbers (Mixtral 8&times;7B)</h3>
+    <ul>
+        <li>$E = 8$ experts, $k = 2$ active per token.</li>
+        <li>Per-token compute: same as a dense 13B model. Per-token <em>parameter count seen</em>: ~13B.</li>
+        <li>Total parameters: ~46.7B (the model file size).</li>
+        <li>You pay the memory cost of all 46.7B but the FLOP cost of only 13B per token.</li>
+    </ul>
+
+    <p>This is why MoE has eaten the high-end frontier: at fixed inference FLOPs, MoE models train cheaper and serve more capability.</p>
+
+    <h3>The downside, in linear-algebra form</h3>
+    <p>The router's output is non-differentiable (top-$k$ is hard). Standard practice: differentiate through only the chosen experts; use auxiliary load-balancing losses to encourage even use; tolerate some routing instability. The gating logic is the part of MoE most likely to misbehave, and it's the part that doesn't fit cleanly into matrix algebra.</p>
+</section>
+
+<section class="slide" id="slide-07">
+    <div class="slide-number">07</div>
+    <h2>Data, Tensor &amp; Pipeline Parallelism</h2>
+    <p>For very large models, parameters and activations don't fit on one GPU. Three orthogonal ways to shard:</p>
+
+    <div class="diagram-grid cols-3">
+        <div class="diagram-panel accent-border">
+            <h4>Data Parallelism (DP)</h4>
+            <p>Replicate the whole model on every GPU; split the <em>batch</em>. Each GPU does a forward+backward on its slice of inputs, then all-reduces gradients. Fully model-replicating &mdash; bandwidth-limited at large scales.</p>
+            <p>Variants: ZeRO-1/2/3 (Rajbhandari 2020) shard optimiser state / gradients / parameters across DP rank to reduce memory.</p>
+        </div>
+        <div class="diagram-panel y">
+            <h4>Tensor Parallelism (TP)</h4>
+            <p>Split a single matmul across GPUs. E.g. $W_{\text{up}} \in \mathbb{R}^{d \times d_{ff}}$ becomes $\big[W_{\text{up}}^{(1)} \mid W_{\text{up}}^{(2)}\big]$ on two GPUs. Output activation is concatenated. Megatron-LM's column/row split is the canonical recipe.</p>
+            <p>Communication: one all-gather + one reduce-scatter per layer. Bandwidth-heavy; usually kept within a single node (NVLink).</p>
+        </div>
+        <div class="diagram-panel g">
+            <h4>Pipeline Parallelism (PP)</h4>
+            <p>Split the <em>layers</em>: GPU 0 does layers 1-10, GPU 1 does layers 11-20, etc. Activations stream forward, gradients stream back. Overlap with micro-batching to keep devices busy. GPipe / 1F1B schedules are standard.</p>
+            <p>Bubble overhead: with $P$ pipeline stages, ~$1 - 1/P$ of the time is productive (less with smart scheduling).</p>
+        </div>
+    </div>
+
+    <h3>The three are orthogonal &mdash; you stack them</h3>
+    <p>A typical big training run combines all three: DP across nodes (pods of GPUs), TP within a node (8 GPUs sharing NVLink), PP across stages of a layer-stack. With GQA + MoE the picture also includes <strong>expert parallelism</strong>: experts sharded across devices, routed-to as a fourth axis.</p>
+
+    <p>The 4D mesh of (DP, TP, PP, EP) on a typical GPU cluster is a non-trivial scheduling problem. Frameworks (PyTorch FSDP, JAX shard_map / GSPMD, Megatron-DeepSpeed) handle it; the einsum view of the underlying op (next slide) is what makes the parallelism legible.</p>
+</section>
+
+<section class="slide" id="slide-08">
+    <div class="slide-number">08</div>
+    <h2>Sharding via Einsum &mdash; The GSPMD Picture</h2>
+    <p>Google's GSPMD framework (Xu et al. 2021) made an observation: <em>parallelising an einsum is a property of the indices, not of the algorithm</em>.</p>
+
+    <p>Take the FFN up-projection: <code>einsum("bld,df->blf", x, W_up)</code>. Each axis can be sharded (S) or replicated (R) across a 1D device mesh:</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>x sharding (b, l, d)</th><th>W sharding (d, f)</th><th>Output</th><th>Communication</th></tr></thead>
+            <tbody>
+                <tr><td>(S, R, R)</td><td>(R, R)</td><td>(S, R, R) — DP</td><td>None for forward; all-reduce gradients.</td></tr>
+                <tr><td>(R, R, R)</td><td>(R, S)</td><td>(R, R, S) — TP column-split</td><td>None for forward; all-gather/reduce-scatter at later stages.</td></tr>
+                <tr><td>(R, R, S)</td><td>(S, R)</td><td>(R, R, R) — TP row-split</td><td>All-reduce on output (the sum over the contracted, sharded $d$ axis).</td></tr>
+                <tr><td>(S, R, S)</td><td>(S, S)</td><td>2D-sharded</td><td>Two-axis collectives.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <p>Reading the table: <strong>shard axes that are <em>not</em> contracted, and you get parallelism with no communication. Shard axes that <em>are</em> contracted, and you need a reduction.</strong> The pattern of communication is determined by which einsum indices were sharded; the algorithm itself doesn't care.</p>
+
+    <h3>How modern frameworks express this</h3>
+    <p>JAX's <code>shard_map</code> and PartIR/GSPMD let you annotate each tensor with a sharding spec; the compiler inserts the all-reduces, all-gathers, reduce-scatters that the einsum requires. PyTorch DTensor has the same idea. <em>You write the algorithm in einsum; the system figures out the parallel collective primitives.</em></p>
+
+    <div class="callout">
+        <div class="callout-label">The grand unification</div>
+        <p>Decks 01-05 taught you that everything in a transformer is matrix algebra. Decks 06-08 told you which structure theorems make it work. Decks 10-11 showed you the actual transformer block in those terms. This deck closes the loop: <em>the same algebra plus axis names is also the language of distributed training</em>. Sharding is just sharding einsum indices. There is one structure here, all the way down.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-09">
+    <div class="slide-number">09</div>
+    <h2>Where the Series Lands</h2>
+    <p>After twelve decks: vectors and matrices, projections and SVD, gradients and chain rules, attention and FFNs, all the way to FlashAttention and tensor parallelism. The arc has been deliberately one-way:</p>
+
+    <div class="diagram-grid cols-3">
+        <div class="diagram-panel accent-border">
+            <h4>Decks 01-04 &mdash; Foundations</h4>
+            <p>Vectors, matrices, matmul, inner products. The language every later deck reads from.</p>
+        </div>
+        <div class="diagram-panel y">
+            <h4>Decks 05-09 &mdash; Structure theorems</h4>
+            <p>Projection, eigen, SVD, QR, gradients. The why behind transformer shape and gradient flow.</p>
+        </div>
+        <div class="diagram-panel g">
+            <h4>Decks 10-12 &mdash; Inside the transformer</h4>
+            <p>Attention, the full block forward pass, and the tensor / sharding view that scales it across pods.</p>
+        </div>
+    </div>
+
+    <h3>Where to go next from here</h3>
+    <ul>
+        <li><strong>Transformer Architecture sub-hub</strong> (<a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Transformer_Architecture">link</a>): visual walkthroughs, every-computation forward pass, RTL implementation, nanoGPT, hardware-aware quantisation, MMUL hardware deep-dive.</li>
+        <li><strong>NVIDIA GPU sub-hub</strong> (<a href="https://github.com/BrendanJamesLynskey/LLM_Hub_NVIDIA_GPUs">link</a>): how the matmuls you've been writing get executed on tensor cores, with full architecture per-generation deep-dives.</li>
+        <li><strong>Google TPUs sub-hub</strong> (<a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Google_TPUs">link</a>): the systolic-array story, every TPU generation, the XLA / JAX / Pallas software stack.</li>
+        <li><strong>Modern Architectures sub-hub</strong> (<a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Modern_Architectures">link</a>): MoE, Mamba, state-space models, long-context techniques, hybrids.</li>
+    </ul>
+
+    <p>Linear algebra is the floor everything else stands on. Every non-trivial idea in modern AI &mdash; attention, RoPE, LoRA, MLA, FlashAttention, GQA, MoE, GSPMD &mdash; is a specific structural fact about matrices and tensors, applied to a specific problem. With this series in hand you can read those structural facts directly off the algorithms.</p>
+</section>
+
+<section class="slide" id="slide-10">
+    <div class="slide-number">10</div>
+    <h2>Cheat Sheet</h2>
+    <ul>
+        <li>A <strong>tensor</strong> is a $k$-dimensional array. Real ML lives in 3D and 4D &mdash; activations $\mathbb{R}^{B \times L \times d}$, scores $\mathbb{R}^{B \times H \times L \times L}$, etc.</li>
+        <li><strong>Einsum</strong> names every index. Repeated indices are contracted; missing indices are summed. Contraction + broadcasting + permutation expressed in one line.</li>
+        <li>Tensors have <strong>strides</strong> &mdash; multipliers for converting from indices to flat-buffer offset. Most ops live on contiguous tensors; transpose is usually a free metadata change.</li>
+        <li><strong>FlashAttention</strong> tiles attention into block matmuls and uses an online softmax to avoid materialising the $L \times L$ score matrix. Same arithmetic; 5-10&times; faster wall-clock; much lower peak memory.</li>
+        <li><strong>Mixture of Experts</strong> = sparse-projection FFN. Top-$k$ of $E$ experts active per token. Trains and serves more capability per FLOP.</li>
+        <li><strong>Three parallelisms:</strong> Data (split batch, replicate model), Tensor (split a matmul across devices), Pipeline (split layers). Stack all three plus expert parallelism for big runs.</li>
+        <li><strong>GSPMD insight:</strong> sharding an einsum is a property of the index pattern. Shard non-contracted axes for free parallelism; shard contracted axes and the system inserts a reduction.</li>
+        <li>Modern frameworks (JAX shard_map, PyTorch DTensor, Megatron) consume einsum-style specs and emit the right collective communication patterns.</li>
+        <li>Linear algebra is the floor under everything else. Twelve decks later: <em>every</em> non-trivial idea in modern AI is a structural fact about matrices applied to a problem.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">End of series</div>
+        <p>Thanks for reading. The companion sub-hubs in the LLMs hub take it from here &mdash; transformer architecture, GPU/TPU hardware, modern architectures, training, evaluations and production. Drop into whichever interests you next.</p>
+    </div>
+</section>
+
+<footer class="footer">
+    <p>Part of the <a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Linear_Algebra">Linear Algebra for AI / ML</a> series. Sources: Dao et al., "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness", NeurIPS 2022; Dao, "FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning", 2023; Shoeybi et al., "Megatron-LM", arXiv:1909.08053 (2019); Rajbhandari et al., "ZeRO", SC 2020; Xu et al., "GSPMD: General and Scalable Parallelization for ML Computation Graphs", arXiv:2105.04663 (2021); Fedus, Zoph &amp; Shazeer, "Switch Transformers", JMLR 2022 (MoE); Jiang et al., "Mixtral of Experts", 2024.</p>
+</footer>
+
+</body>
+</html>
